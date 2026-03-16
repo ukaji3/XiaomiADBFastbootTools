@@ -540,61 +540,32 @@ class MainController : Initializable {
     private suspend fun checkEIS(): Boolean =
         "1" in Command.exec(mutableListOf("adb", "shell", "getprop", "persist.camera.eis.enable"))
 
-    @FXML
-    private fun disableCamera2ButtonPressed(event: ActionEvent) {
+    private fun toggleRecoveryProp(prop: String, value: String, successMsg: String, failMsg: String, verify: suspend () -> Boolean) {
         GlobalScope.launch {
             if (Device.checkRecovery()) {
-                Command.exec(mutableListOf("adb", "shell", "setprop", "persist.camera.HAL3.enabled", "0"))
+                Command.exec(mutableListOf("adb", "shell", "setprop", prop, value))
                 withContext(Dispatchers.Main) {
-                    outputTextArea.text = if (!checkCamera2())
-                        "Camera2 disabled!"
-                    else "ERROR: Couldn't disable Camera2!"
+                    outputTextArea.text = if (verify()) successMsg else failMsg
                 }
             } else checkDevice()
         }
     }
 
     @FXML
-    private fun enableCamera2ButtonPressed(event: ActionEvent) {
-        GlobalScope.launch {
-            if (Device.checkRecovery()) {
-                Command.exec(mutableListOf("adb", "shell", "setprop", "persist.camera.HAL3.enabled", "1"))
-                withContext(Dispatchers.Main) {
-                    outputTextArea.text = if (checkCamera2())
-                        "Camera2 enabled!"
-                    else "ERROR: Couldn't enable Camera2!"
-                }
-            } else checkDevice()
-        }
-    }
+    private fun disableCamera2ButtonPressed(event: ActionEvent) =
+        toggleRecoveryProp("persist.camera.HAL3.enabled", "0", "Camera2 disabled!", "ERROR: Couldn't disable Camera2!") { !checkCamera2() }
 
     @FXML
-    private fun disableEISButtonPressed(event: ActionEvent) {
-        GlobalScope.launch {
-            if (Device.checkRecovery()) {
-                Command.exec(mutableListOf("adb", "shell", "setprop", "persist.camera.eis.enable", "0"))
-                withContext(Dispatchers.Main) {
-                    outputTextArea.text = if (!checkEIS())
-                        "EIS disabled!"
-                    else "ERROR: Couldn't disable EIS!"
-                }
-            } else checkDevice()
-        }
-    }
+    private fun enableCamera2ButtonPressed(event: ActionEvent) =
+        toggleRecoveryProp("persist.camera.HAL3.enabled", "1", "Camera2 enabled!", "ERROR: Couldn't enable Camera2!") { checkCamera2() }
 
     @FXML
-    private fun enableEISButtonPressed(event: ActionEvent) {
-        GlobalScope.launch {
-            if (Device.checkRecovery()) {
-                Command.exec(mutableListOf("adb", "shell", "setprop", "persist.camera.eis.enable", "1"))
-                withContext(Dispatchers.Main) {
-                    outputTextArea.text = if (checkEIS())
-                        "EIS enabled!"
-                    else "ERROR: Couldn't enable EIS!"
-                }
-            } else checkDevice()
-        }
-    }
+    private fun disableEISButtonPressed(event: ActionEvent) =
+        toggleRecoveryProp("persist.camera.eis.enable", "0", "EIS disabled!", "ERROR: Couldn't disable EIS!") { !checkEIS() }
+
+    @FXML
+    private fun enableEISButtonPressed(event: ActionEvent) =
+        toggleRecoveryProp("persist.camera.eis.enable", "1", "EIS enabled!", "ERROR: Couldn't enable EIS!") { checkEIS() }
 
     @FXML
     private fun openButtonPressed(event: ActionEvent) {
@@ -614,97 +585,38 @@ class MainController : Initializable {
         }
     }
 
-    @FXML
-    private fun applyDpiButtonPressed(event: ActionEvent) {
-        if (dpiTextField.text.isNotBlank())
-            GlobalScope.launch {
-                if (Device.checkADB()) {
-                    val attempt =
-                        Command.execDisplayed(mutableListOf("adb", "shell", "wm", "density", dpiTextField.text.trim()))
-                    withContext(Dispatchers.Main) {
-                        outputTextArea.text = when {
-                            "permission" in attempt ->
-                                "ERROR: Please allow USB debugging (Security settings)!"
-                            "bad" in attempt ->
-                                "ERROR: Invalid value!"
-                            attempt.isEmpty() ->
-                                "Done!"
-                            else ->
-                                "ERROR: $attempt"
-                        }
-                    }
-                } else checkDevice()
-            }
-    }
-
-    @FXML
-    private fun resetDpiButtonPressed(event: ActionEvent) {
+    private fun execWmCommand(vararg args: String) {
         GlobalScope.launch {
             if (Device.checkADB()) {
-                val attempt = Command.execDisplayed(mutableListOf("adb", "shell", "wm", "density", "reset"))
+                val attempt = Command.execDisplayed(mutableListOf("adb", "shell", "wm", *args))
                 withContext(Dispatchers.Main) {
                     outputTextArea.text = when {
-                        "permission" in attempt ->
-                            "ERROR: Please allow USB debugging (Security settings)!"
-                        attempt.isEmpty() ->
-                            "Done!"
-                        else ->
-                            "ERROR: $attempt"
+                        "permission" in attempt -> "ERROR: Please allow USB debugging (Security settings)!"
+                        "bad" in attempt -> "ERROR: Invalid value!"
+                        attempt.isEmpty() -> "Done!"
+                        else -> "ERROR: $attempt"
                     }
                 }
             } else checkDevice()
         }
     }
+
+    @FXML
+    private fun applyDpiButtonPressed(event: ActionEvent) {
+        if (dpiTextField.text.isNotBlank()) execWmCommand("density", dpiTextField.text.trim())
+    }
+
+    @FXML
+    private fun resetDpiButtonPressed(event: ActionEvent) = execWmCommand("density", "reset")
 
     @FXML
     private fun applyResButtonPressed(event: ActionEvent) {
         if (widthTextField.text.isNotBlank() && heightTextField.text.isNotBlank())
-            GlobalScope.launch {
-                if (Device.checkADB()) {
-                    val attempt =
-                        Command.execDisplayed(
-                            mutableListOf(
-                                "adb",
-                                "shell",
-                                "wm",
-                                "size",
-                                "${widthTextField.text.trim()}x${heightTextField.text.trim()}"
-                            )
-                        )
-                    withContext(Dispatchers.Main) {
-                        outputTextArea.text = when {
-                            "permission" in attempt ->
-                                "ERROR: Please allow USB debugging (Security settings)!"
-                            "bad" in attempt ->
-                                "ERROR: Invalid value!"
-                            attempt.isEmpty() ->
-                                "Done!"
-                            else ->
-                                "ERROR: $attempt"
-                        }
-                    }
-                } else checkDevice()
-            }
+            execWmCommand("size", "${widthTextField.text.trim()}x${heightTextField.text.trim()}")
     }
 
     @FXML
-    private fun resetResButtonPressed(event: ActionEvent) {
-        GlobalScope.launch {
-            if (Device.checkADB()) {
-                val attempt = Command.execDisplayed(mutableListOf("adb", "shell", "wm", "size", "reset"))
-                withContext(Dispatchers.Main) {
-                    outputTextArea.text = when {
-                        "permission" in attempt ->
-                            "ERROR: Please allow USB debugging (Security settings)!"
-                        attempt.isEmpty() ->
-                            "Done!"
-                        else ->
-                            "ERROR: $attempt"
-                    }
-                }
-            } else checkDevice()
-        }
-    }
+    private fun resetResButtonPressed(event: ActionEvent) = execWmCommand("size", "reset")
 
     @FXML
     private fun readPropertiesMenuItemPressed(event: ActionEvent) {
