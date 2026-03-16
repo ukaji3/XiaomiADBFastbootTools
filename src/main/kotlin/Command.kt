@@ -20,7 +20,7 @@ object Command : CommandRunner {
         }
     }
 
-    suspend fun check(printErr: Boolean = false): Boolean {
+    override suspend fun check(printErr: Boolean): Boolean {
         try {
             setup("")
         } catch (e: Exception) {
@@ -37,7 +37,7 @@ object Command : CommandRunner {
         return true
     }
 
-    suspend fun exec(vararg args: MutableList<String>, redirectErrorStream: Boolean = true): String {
+    override suspend fun exec(vararg args: MutableList<String>, redirectErrorStream: Boolean): String {
         val sb = StringBuilder()
         args.forEach {
             it[0] = prefix + it[0]

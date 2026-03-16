@@ -346,16 +346,19 @@ class MainController : Initializable {
                         if ("Unauthorised" !in outputTextArea.text)
                             outputTextArea.text =
                                 "Unauthorised device found!\nPlease allow USB debugging on the device!\n\n"
+                        Unit
                     }
                     Mode.ADB_ERROR -> {
                         if ("loaded" !in outputTextArea.text)
                             outputTextArea.text =
                                 "ERROR: The device cannot be loaded!\nTry setting the USB configuration to data transfer or launching the application with root/admin privileges!\n\n"
+                        Unit
                     }
                     Mode.FASTBOOT_ERROR -> {
                         if ("loaded" !in outputTextArea.text)
                             outputTextArea.text =
                                 "ERROR: The device cannot be loaded!\nTry launching the application with root/admin privileges!\n\n"
+                        Unit
                     }
                     else -> {
                     }
