@@ -20,6 +20,7 @@ class AdbTabController : Initializable, CoroutineScope {
     override val coroutineContext = Dispatchers.Main + job
 
     @FXML lateinit var appManagerPane: TabPane
+    @FXML private lateinit var showAllAppsCheckBox: CheckBox
     @FXML lateinit var reinstallerTab: Tab
     @FXML lateinit var disablerTab: Tab
     @FXML lateinit var enablerTab: Tab
@@ -166,6 +167,11 @@ class AdbTabController : Initializable, CoroutineScope {
         toggleRecoveryProp("persist.camera.eis.enable", "1", "EIS enabled!", "ERROR: Couldn't enable EIS!") { checkEIS() }
     @FXML private fun disableEISButtonPressed(event: ActionEvent) =
         toggleRecoveryProp("persist.camera.eis.enable", "0", "EIS disabled!", "ERROR: Couldn't disable EIS!") { !checkEIS() }
+
+    @FXML private fun showAllAppsToggled(event: ActionEvent) {
+        AppManager.showAllApps = showAllAppsCheckBox.isSelected
+        launch { refreshAppTables() }
+    }
 
     @FXML private fun openButtonPressed(event: ActionEvent) {
         launch(Dispatchers.IO) {

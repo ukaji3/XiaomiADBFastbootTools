@@ -15,6 +15,7 @@
 <?import javafx.scene.layout.RowConstraints?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.text.Font?>
+<?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.Label?>
 
 <AnchorPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="AdbTabController">
@@ -28,6 +29,11 @@
                                     <RowConstraints minHeight="10.0" vgrow="SOMETIMES" />
                                  </rowConstraints>
                                  <children>
+                                    <VBox>
+                                       <children>
+                                          <CheckBox fx:id="showAllAppsCheckBox" text="Show all installed apps (risky)" onAction="#showAllAppsToggled">
+                                             <padding><Insets top="4.0" bottom="4.0" left="8.0" /></padding>
+                                          </CheckBox>
                                     <TabPane fx:id="appManagerPane" disable="true">
                                        <tabs>
                                           <Tab fx:id="uninstallerTab" closable="false" text="Uninstaller">
@@ -156,6 +162,8 @@
                                           </Tab>
                                        </tabs>
                                     </TabPane>
+                                       </children>
+                                    </VBox>
                                     <VBox spacing="10.0" GridPane.columnIndex="1">
                                        <children>
                                           <TitledPane fx:id="camera2Pane" animated="false" collapsible="false" disable="true" text="Camera2 API (HAL3)">

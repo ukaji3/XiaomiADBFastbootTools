@@ -15,6 +15,7 @@ object AppManager {
 
     lateinit var cmd: CommandRunner
     var user = "0"
+    var showAllApps = false
     val customApps = File(XiaomiADBFastbootTools.dir, "apps.yml")
     private val potentialApps = mutableMapOf<String, String>()
 
@@ -52,7 +53,10 @@ object AppManager {
             .forEach { deviceApps[it.substringAfter(':').trim()] = "disabled" }
         cmd.exec(listOf("adb", "shell", "pm", "list", "packages", "-e", "--user", user)).trim().lines()
             .forEach { deviceApps[it.substringAfter(':').trim()] = "enabled" }
-        potentialApps.forEach { (pkg, name) ->
+        val apps = if (showAllApps)
+            deviceApps.keys.associateWith { potentialApps[it] ?: it.substringAfterLast('.') }
+        else potentialApps
+        apps.forEach { (pkg, name) ->
             when (deviceApps[pkg]) {
                 "disabled" -> {
                     uninstallApps.add(name, pkg)
