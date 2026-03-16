@@ -21,7 +21,10 @@ import java.net.URL
 import java.util.*
 import java.util.zip.ZipFile
 
-class MainController : Initializable {
+class MainController : Initializable, CoroutineScope {
+
+    private val job = SupervisorJob()
+    override val coroutineContext = Dispatchers.Main + job
 
     @FXML private lateinit var deviceMenu: Menu
     @FXML private lateinit var appManagerMenu: Menu
@@ -38,6 +41,8 @@ class MainController : Initializable {
     @FXML private lateinit var adbTabContentController: AdbTabController
     @FXML private lateinit var fastbootTabContent: AnchorPane
     @FXML private lateinit var fastbootTabContentController: FastbootTabController
+
+    private var adbVersion = ""
 
     private val displayOutput: suspend (String) -> Unit = { line ->
         withContext(Dispatchers.Main) { outputTextArea.appendText(line) }
@@ -166,7 +171,7 @@ class MainController : Initializable {
             onSetPanels = { setPanels(it) }
         }
 
-        GlobalScope.launch(Dispatchers.IO) {
+        launch(Dispatchers.IO) {
             try {
                 val link = URL("https://api.github.com/repos/Szaki/XiaomiADBFastbootTools/releases/latest").readText()
                     .substringAfter("\"html_url\":\"").substringBefore('"')
@@ -222,12 +227,13 @@ class MainController : Initializable {
                         Platform.exit()
                     }
             }
+            adbVersion = try { Command.exec(mutableListOf("adb", "--version")).lines()[1] } catch (e: Exception) { "Unknown" }
             checkDevice()
         }
     }
 
     @FXML private fun secondSpaceButtonPressed(event: ActionEvent) {
-        GlobalScope.launch {
+        launch {
             if (Device.checkADB()) {
                 AppManager.user = if (secondSpaceButton.isSelected) "10" else "0"
                 adbTabContentController.refreshAppTables()
@@ -236,7 +242,7 @@ class MainController : Initializable {
     }
 
     @FXML private fun addAppsButtonPressed(event: ActionEvent) {
-        GlobalScope.launch(Dispatchers.IO) {
+        launch(Dispatchers.IO) {
             if (Device.checkADB()) {
                 val scene = javafx.scene.Scene(javafx.fxml.FXMLLoader(javaClass.classLoader.getResource("AppAdder.fxml")).load())
                 withContext(Dispatchers.Main) { Stage().apply { initModality(Modality.APPLICATION_MODAL); this.scene = scene; isResizable = false; showAndWait() } }
@@ -245,7 +251,7 @@ class MainController : Initializable {
     }
 
     @FXML private fun readPropertiesMenuItemPressed(event: ActionEvent) {
-        GlobalScope.launch {
+        launch {
             withContext(Dispatchers.Main) { outputTextArea.text = "" }
             when (Device.mode) {
                 Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.execDisplayed(mutableListOf("adb", "shell", "getprop"), onOutput = displayOutput) else checkDevice() }
@@ -256,7 +262,7 @@ class MainController : Initializable {
     }
 
     @FXML private fun savePropertiesMenuItemPressed(event: ActionEvent) {
-        GlobalScope.launch {
+        launch {
             when (Device.mode) {
                 Mode.ADB, Mode.RECOVERY -> {
                     if (Device.checkADB()) {
@@ -286,7 +292,7 @@ class MainController : Initializable {
     }
 
     @FXML private fun systemMenuItemPressed(event: ActionEvent) {
-        GlobalScope.launch {
+        launch {
             when (Device.mode) {
                 Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.exec(mutableListOf("adb", "reboot")); checkDevice() }
                 Mode.FASTBOOT -> { if (Device.checkFastboot()) Command.exec(mutableListOf("fastboot", "reboot")); checkDevice() }
@@ -296,11 +302,11 @@ class MainController : Initializable {
     }
 
     @FXML private fun recoveryMenuItemPressed(event: ActionEvent) {
-        GlobalScope.launch { if (Device.mode == Mode.ADB || Device.mode == Mode.RECOVERY) { if (Device.checkADB()) Command.exec(mutableListOf("adb", "reboot", "recovery")); checkDevice() } }
+        launch { if (Device.mode == Mode.ADB || Device.mode == Mode.RECOVERY) { if (Device.checkADB()) Command.exec(mutableListOf("adb", "reboot", "recovery")); checkDevice() } }
     }
 
     @FXML private fun fastbootMenuItemPressed(event: ActionEvent) {
-        GlobalScope.launch {
+        launch {
             when (Device.mode) {
                 Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.exec(mutableListOf("adb", "reboot", "bootloader")); checkDevice() }
                 Mode.FASTBOOT -> { if (Device.checkFastboot()) Command.exec(mutableListOf("fastboot", "reboot", "bootloader")); checkDevice() }
@@ -310,7 +316,7 @@ class MainController : Initializable {
     }
 
     @FXML private fun edlMenuItemPressed(event: ActionEvent) {
-        GlobalScope.launch {
+        launch {
             when (Device.mode) {
                 Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.exec(mutableListOf("adb", "reboot", "edl")); checkDevice() }
                 Mode.FASTBOOT -> { if (Device.checkFastboot()) Command.exec(mutableListOf("fastboot", "oem", "edl")); checkDevice() }
@@ -319,13 +325,13 @@ class MainController : Initializable {
         }
     }
 
-    @FXML private fun reloadMenuItemPressed(event: ActionEvent) = GlobalScope.launch { checkDevice() }
+    @FXML private fun reloadMenuItemPressed(event: ActionEvent) = launch { checkDevice() }
 
     @FXML private fun aboutMenuItemPressed(event: ActionEvent) {
         Alert(AlertType.INFORMATION).apply {
             initStyle(StageStyle.UTILITY); title = "About"; graphic = ImageView("icon.png")
             headerText = "Xiaomi ADB/Fastboot Tools\nVersion ${XiaomiADBFastbootTools.version}\nCreated by Szaki\n\n" +
-                    "SDK Platform Tools\n${runBlocking { Command.exec(mutableListOf("adb", "--version")).lines()[1] }}"
+                    "SDK Platform Tools\n$adbVersion"
             val vb = VBox(); vb.alignment = Pos.CENTER
             val discord = Hyperlink("Xiaomi Community on Discord"); val twitter = Hyperlink("Szaki on Twitter"); val github = Hyperlink("Repository on GitHub")
             listOf(discord to "http://discord.szaki.io/", twitter to "http://twitter.szaki.io/", github to "https://github.com/Szaki/XiaomiADBFastbootTools").forEach { (link, url) ->

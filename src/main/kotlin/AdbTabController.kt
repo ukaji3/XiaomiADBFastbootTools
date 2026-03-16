@@ -14,7 +14,10 @@ import kotlinx.coroutines.*
 import java.net.URL
 import java.util.*
 
-class AdbTabController : Initializable {
+class AdbTabController : Initializable, CoroutineScope {
+
+    private val job = SupervisorJob()
+    override val coroutineContext = Dispatchers.Main + job
 
     @FXML lateinit var appManagerPane: TabPane
     @FXML lateinit var reinstallerTab: Tab
@@ -105,7 +108,7 @@ class AdbTabController : Initializable {
         operation: suspend (List<App>, suspend (OperationResult) -> Unit) -> List<OperationResult>
     ) {
         if (isAppSelected(tableView.items))
-            GlobalScope.launch {
+            launch {
                 if (Device.checkADB()) {
                     if (confirm()) {
                         val selected = tableView.items.filter { it.selectedProperty().get() }
@@ -147,7 +150,7 @@ class AdbTabController : Initializable {
     private suspend fun checkEIS() = "1" in Command.exec(mutableListOf("adb", "shell", "getprop", "persist.camera.eis.enable"))
 
     private fun toggleRecoveryProp(prop: String, value: String, successMsg: String, failMsg: String, verify: suspend () -> Boolean) {
-        GlobalScope.launch {
+        launch {
             if (Device.checkRecovery()) {
                 Command.exec(mutableListOf("adb", "shell", "setprop", prop, value))
                 withContext(Dispatchers.Main) { outputTextArea.text = if (verify()) successMsg else failMsg }
@@ -165,7 +168,7 @@ class AdbTabController : Initializable {
         toggleRecoveryProp("persist.camera.eis.enable", "0", "EIS disabled!", "ERROR: Couldn't disable EIS!") { !checkEIS() }
 
     @FXML private fun openButtonPressed(event: ActionEvent) {
-        GlobalScope.launch(Dispatchers.IO) {
+        launch(Dispatchers.IO) {
             if (Device.checkADB()) {
                 val scene = Scene(FXMLLoader(javaClass.classLoader.getResource("FileExplorer.fxml")).load())
                 withContext(Dispatchers.Main) {
@@ -176,7 +179,7 @@ class AdbTabController : Initializable {
     }
 
     private fun execWmCommand(vararg args: String) {
-        GlobalScope.launch {
+        launch {
             if (Device.checkADB()) {
                 withContext(Dispatchers.Main) { outputTextArea.text = "" }
                 val attempt = Command.execDisplayed(mutableListOf("adb", "shell", "wm", *args), onOutput = displayOutput)

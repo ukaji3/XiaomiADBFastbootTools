@@ -12,7 +12,10 @@ import java.io.File
 import java.net.URL
 import java.util.*
 
-class FastbootTabController : Initializable {
+class FastbootTabController : Initializable, CoroutineScope {
+
+    private val job = SupervisorJob()
+    override val coroutineContext = Dispatchers.Main + job
 
     @FXML lateinit var flasherPane: TitledPane
     @FXML lateinit var wiperPane: TitledPane
@@ -53,7 +56,7 @@ class FastbootTabController : Initializable {
     }
 
     @FXML private fun antirbButtonPressed(event: ActionEvent) {
-        GlobalScope.launch {
+        launch {
             if (Device.checkFastboot()) {
                 File("dummy.img").apply {
                     writeBytes(ByteArray(8192))
@@ -83,7 +86,7 @@ class FastbootTabController : Initializable {
         image?.let {
             partitionComboBox.value?.let { pcb ->
                 if (it.absolutePath.isNotBlank() && pcb.isNotBlank())
-                    GlobalScope.launch {
+                    launch {
                         if (Device.checkFastboot()) {
                             if (confirm()) {
                                 withContext(Dispatchers.Main) { outputTextArea.text = ""; progressIndicator.isVisible = true }
@@ -119,7 +122,7 @@ class FastbootTabController : Initializable {
         romDirectory?.let { dir ->
             ROMFlasher.directory = dir
             scriptComboBox.value?.let { scb ->
-                GlobalScope.launch {
+                launch {
                     if (Device.checkFastboot()) {
                         if (confirm()) {
                             onSetPanels(null)
@@ -140,7 +143,7 @@ class FastbootTabController : Initializable {
     @FXML private fun bootButtonPressed(event: ActionEvent) {
         image?.let {
             if (it.absolutePath.isNotBlank())
-                GlobalScope.launch {
+                launch {
                     if (Device.checkFastboot()) {
                         withContext(Dispatchers.Main) { outputTextArea.text = ""; progressIndicator.isVisible = true }
                         Command.execWithImage(mutableListOf("fastboot", "boot"), image = it, onOutput = displayOutput)
@@ -151,25 +154,25 @@ class FastbootTabController : Initializable {
     }
 
     @FXML private fun cacheButtonPressed(event: ActionEvent) {
-        GlobalScope.launch { if (Device.checkFastboot()) execFastbootDisplayed(mutableListOf("fastboot", "erase", "cache")) else onDeviceLost() }
+        launch { if (Device.checkFastboot()) execFastbootDisplayed(mutableListOf("fastboot", "erase", "cache")) else onDeviceLost() }
     }
     @FXML private fun dataButtonPressed(event: ActionEvent) {
-        GlobalScope.launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "erase", "userdata")) } else onDeviceLost() }
+        launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "erase", "userdata")) } else onDeviceLost() }
     }
     @FXML private fun cachedataButtonPressed(event: ActionEvent) {
-        GlobalScope.launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "erase", "cache"), mutableListOf("fastboot", "erase", "userdata")) } else onDeviceLost() }
+        launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "erase", "cache"), mutableListOf("fastboot", "erase", "userdata")) } else onDeviceLost() }
     }
     @FXML private fun lockButtonPressed(event: ActionEvent) {
-        GlobalScope.launch { if (Device.checkFastboot()) { if (confirm("Your partitions must be intact in order to successfully lock the bootloader.")) if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "oem", "lock")) } else onDeviceLost() }
+        launch { if (Device.checkFastboot()) { if (confirm("Your partitions must be intact in order to successfully lock the bootloader.")) if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "oem", "lock")) } else onDeviceLost() }
     }
     @FXML private fun unlockButtonPressed(event: ActionEvent) {
-        GlobalScope.launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "oem", "unlock")) } else onDeviceLost() }
+        launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "oem", "unlock")) } else onDeviceLost() }
     }
 
     @FXML private fun getlinkButtonPressed(event: ActionEvent) {
         branchComboBox.value?.let {
             if (codenameTextField.text.isNotBlank()) {
-                GlobalScope.launch {
+                launch {
                     withContext(Dispatchers.Main) { outputTextArea.appendText("\nLooking for $it...\n"); progressIndicator.isVisible = true }
                     val link = RomLinkResolver.getLink(it, codenameTextField.text.trim())
                     withContext(Dispatchers.Main) {
@@ -192,7 +195,7 @@ class FastbootTabController : Initializable {
                     title = "Select the download location of the Fastboot ROM"
                     showDialog((event.source as Node).scene.window)?.let {
                         outputTextArea.appendText("Looking for $branch...\n"); progressIndicator.isVisible = true
-                        GlobalScope.launch {
+                        launch {
                             val link = RomLinkResolver.getLink(branch, codenameTextField.text.trim())
                             if (link != null && "bigota" in link) {
                                 withContext(Dispatchers.Main) {

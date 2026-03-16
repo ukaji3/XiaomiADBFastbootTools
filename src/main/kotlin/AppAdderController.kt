@@ -7,12 +7,14 @@ import javafx.scene.control.TextArea
 import javafx.stage.FileChooser
 import javafx.stage.Stage
 import javafx.stage.StageStyle
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import java.net.URL
 import java.util.*
 
-class AppAdderController : Initializable {
+class AppAdderController : Initializable, CoroutineScope {
+
+    private val job = SupervisorJob()
+    override val coroutineContext = Dispatchers.Main + job
 
     @FXML
     private lateinit var appTextArea: TextArea
@@ -39,7 +41,7 @@ class AppAdderController : Initializable {
                 headerText = "Uninstalling apps which aren't listed by default may brick your device."
                 showAndWait()
             }
-            GlobalScope.launch {
+            launch {
                 AppManager.apply {
                     customApps.writeText(appTextArea.text.trim())
                     readPotentialApps()

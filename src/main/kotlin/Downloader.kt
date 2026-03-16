@@ -15,7 +15,7 @@ class Downloader(link: String, private val target: File, private val progressLab
     private val speed: Float
         get() = target.length() / ((System.currentTimeMillis() - startTime) / 1000.0f)
 
-    suspend fun start(scope: CoroutineScope = GlobalScope) {
+    suspend fun start(scope: CoroutineScope) {
         startTime = System.currentTimeMillis()
         val job = scope.launch(Dispatchers.IO) {
             FileOutputStream(target).channel.transferFrom(
