@@ -1,5 +1,3 @@
-import javafx.scene.control.ProgressIndicator
-import javafx.scene.control.TextInputControl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -8,8 +6,6 @@ import java.util.*
 object Command : CommandRunner {
 
     var prefix = ""
-    lateinit var outputTextArea: TextInputControl
-    lateinit var progressIndicator: ProgressIndicator
 
     private suspend fun setup(pref: String) {
         prefix = pref
@@ -51,33 +47,12 @@ object Command : CommandRunner {
         return sb.toString()
     }
 
-    suspend fun exec(vararg args: MutableList<String>, image: File?) {
-        withContext(Dispatchers.Main) {
-            progressIndicator.isVisible = true
-            outputTextArea.text = ""
-        }
-        args.forEach {
-            it[0] = prefix + it[0]
-            withContext(Dispatchers.IO) {
-                Scanner(startProcess(it + image?.absolutePath, true).inputStream, "UTF-8").useDelimiter("")
-                    .use { scanner ->
-                        while (scanner.hasNextLine())
-                            withContext(Dispatchers.Main) {
-                                outputTextArea.appendText(scanner.nextLine() + '\n')
-                            }
-                    }
-            }
-        }
-        withContext(Dispatchers.Main) {
-            progressIndicator.isVisible = false
-        }
-    }
-
-    suspend fun execDisplayed(vararg args: MutableList<String>, redirectErrorStream: Boolean = true): String {
+    suspend fun execDisplayed(
+        vararg args: MutableList<String>,
+        redirectErrorStream: Boolean = true,
+        onOutput: suspend (String) -> Unit = {}
+    ): String {
         val sb = StringBuilder()
-        withContext(Dispatchers.Main) {
-            outputTextArea.text = ""
-        }
         args.forEach {
             it[0] = prefix + it[0]
             withContext(Dispatchers.IO) {
@@ -85,13 +60,28 @@ object Command : CommandRunner {
                     while (scanner.hasNextLine()) {
                         val next = scanner.nextLine() + '\n'
                         sb.append(next)
-                        withContext(Dispatchers.Main) {
-                            outputTextArea.appendText(next)
-                        }
+                        onOutput(next)
                     }
                 }
             }
         }
         return sb.toString()
+    }
+
+    suspend fun execWithImage(
+        vararg args: MutableList<String>,
+        image: File,
+        onOutput: suspend (String) -> Unit = {}
+    ) {
+        args.forEach {
+            it[0] = prefix + it[0]
+            withContext(Dispatchers.IO) {
+                Scanner(startProcess(it + image.absolutePath, true).inputStream, "UTF-8").useDelimiter("")
+                    .use { scanner ->
+                        while (scanner.hasNextLine())
+                            onOutput(scanner.nextLine() + '\n')
+                    }
+            }
+        }
     }
 }

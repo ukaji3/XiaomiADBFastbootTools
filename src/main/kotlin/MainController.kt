@@ -183,6 +183,10 @@ class MainController : Initializable {
     private var image: File? = null
     private var romDirectory: File? = null
 
+    private val displayOutput: suspend (String) -> Unit = { line ->
+        withContext(Dispatchers.Main) { outputTextArea.appendText(line) }
+    }
+
     private suspend fun setPanels(mode: Mode?) {
         withContext(Dispatchers.Main) {
             when (mode) {
@@ -426,8 +430,6 @@ class MainController : Initializable {
         disablerTableView.setKeyListener()
         enablerTableView.setKeyListener()
 
-        Command.outputTextArea = outputTextArea
-        Command.progressIndicator = progressIndicator
         Device.cmd = Command
         AppManager.cmd = Command
 
@@ -588,7 +590,8 @@ class MainController : Initializable {
     private fun execWmCommand(vararg args: String) {
         GlobalScope.launch {
             if (Device.checkADB()) {
-                val attempt = Command.execDisplayed(mutableListOf("adb", "shell", "wm", *args))
+                withContext(Dispatchers.Main) { outputTextArea.text = "" }
+                val attempt = Command.execDisplayed(mutableListOf("adb", "shell", "wm", *args), onOutput = displayOutput)
                 withContext(Dispatchers.Main) {
                     outputTextArea.text = when {
                         "permission" in attempt -> "ERROR: Please allow USB debugging (Security settings)!"
@@ -621,14 +624,15 @@ class MainController : Initializable {
     @FXML
     private fun readPropertiesMenuItemPressed(event: ActionEvent) {
         GlobalScope.launch {
+            withContext(Dispatchers.Main) { outputTextArea.text = "" }
             when (Device.mode) {
                 Mode.ADB, Mode.RECOVERY -> {
                     if (Device.checkADB())
-                        Command.execDisplayed(mutableListOf("adb", "shell", "getprop")) else checkDevice()
+                        Command.execDisplayed(mutableListOf("adb", "shell", "getprop"), onOutput = displayOutput) else checkDevice()
                 }
                 Mode.FASTBOOT -> {
                     if (Device.checkFastboot())
-                        Command.execDisplayed(mutableListOf("fastboot", "getvar", "all")) else checkDevice()
+                        Command.execDisplayed(mutableListOf("fastboot", "getvar", "all"), onOutput = displayOutput) else checkDevice()
                 }
                 else -> {
                 }
@@ -732,13 +736,18 @@ class MainController : Initializable {
                     GlobalScope.launch {
                         if (Device.checkFastboot()) {
                             if (confirm()) {
+                                withContext(Dispatchers.Main) {
+                                    outputTextArea.text = ""
+                                    progressIndicator.isVisible = true
+                                }
                                 if (autobootCheckBox.isSelected && pcb.trim() == "recovery")
-                                    Command.exec(
+                                    Command.execWithImage(
                                         mutableListOf("fastboot", "flash", pcb.trim()),
                                         mutableListOf("fastboot", "boot"),
-                                        image = it
+                                        image = it, onOutput = displayOutput
                                     )
-                                else Command.exec(mutableListOf("fastboot", "flash", pcb.trim()), image = it)
+                                else Command.execWithImage(mutableListOf("fastboot", "flash", pcb.trim()), image = it, onOutput = displayOutput)
+                                withContext(Dispatchers.Main) { progressIndicator.isVisible = false }
                             }
                         } else checkDevice()
                     }
@@ -815,17 +824,25 @@ class MainController : Initializable {
         image?.let {
             if (it.absolutePath.isNotBlank())
                 GlobalScope.launch {
-                    if (Device.checkFastboot())
-                        Command.exec(mutableListOf("fastboot", "boot"), image = it) else checkDevice()
+                    if (Device.checkFastboot()) {
+                        withContext(Dispatchers.Main) { outputTextArea.text = ""; progressIndicator.isVisible = true }
+                        Command.execWithImage(mutableListOf("fastboot", "boot"), image = it, onOutput = displayOutput)
+                        withContext(Dispatchers.Main) { progressIndicator.isVisible = false }
+                    } else checkDevice()
                 }
         }
+    }
+
+    private suspend fun execFastbootDisplayed(vararg args: MutableList<String>) {
+        withContext(Dispatchers.Main) { outputTextArea.text = "" }
+        Command.execDisplayed(*args, onOutput = displayOutput)
     }
 
     @FXML
     private fun cacheButtonPressed(event: ActionEvent) {
         GlobalScope.launch {
             if (Device.checkFastboot())
-                Command.execDisplayed(mutableListOf("fastboot", "erase", "cache")) else checkDevice()
+                execFastbootDisplayed(mutableListOf("fastboot", "erase", "cache")) else checkDevice()
         }
     }
 
@@ -833,11 +850,8 @@ class MainController : Initializable {
     private fun dataButtonPressed(event: ActionEvent) {
         GlobalScope.launch {
             if (Device.checkFastboot()) {
-                if (confirm("All your data will be gone.")) {
-                    Command.execDisplayed(
-                        mutableListOf("fastboot", "erase", "userdata")
-                    )
-                }
+                if (confirm("All your data will be gone."))
+                    execFastbootDisplayed(mutableListOf("fastboot", "erase", "userdata"))
             } else checkDevice()
         }
     }
@@ -846,12 +860,8 @@ class MainController : Initializable {
     private fun cachedataButtonPressed(event: ActionEvent) {
         GlobalScope.launch {
             if (Device.checkFastboot()) {
-                if (confirm("All your data will be gone.")) {
-                    Command.execDisplayed(
-                        mutableListOf("fastboot", "erase", "cache"),
-                        mutableListOf("fastboot", "erase", "userdata")
-                    )
-                }
+                if (confirm("All your data will be gone."))
+                    execFastbootDisplayed(mutableListOf("fastboot", "erase", "cache"), mutableListOf("fastboot", "erase", "userdata"))
             } else checkDevice()
         }
     }
@@ -860,11 +870,9 @@ class MainController : Initializable {
     private fun lockButtonPressed(event: ActionEvent) {
         GlobalScope.launch {
             if (Device.checkFastboot()) {
-                if (confirm("Your partitions must be intact in order to successfully lock the bootloader.")) {
-                    if (confirm("All your data will be gone.")) {
-                        Command.execDisplayed(mutableListOf("fastboot", "oem", "lock"))
-                    }
-                }
+                if (confirm("Your partitions must be intact in order to successfully lock the bootloader."))
+                    if (confirm("All your data will be gone."))
+                        execFastbootDisplayed(mutableListOf("fastboot", "oem", "lock"))
             } else checkDevice()
         }
     }
@@ -873,9 +881,8 @@ class MainController : Initializable {
     private fun unlockButtonPressed(event: ActionEvent) {
         GlobalScope.launch {
             if (Device.checkFastboot()) {
-                if (confirm("All your data will be gone.")) {
-                    Command.execDisplayed(mutableListOf("fastboot", "oem", "unlock"))
-                }
+                if (confirm("All your data will be gone."))
+                    execFastbootDisplayed(mutableListOf("fastboot", "oem", "unlock"))
             } else checkDevice()
         }
     }
