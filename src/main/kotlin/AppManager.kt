@@ -1,25 +1,20 @@
-import Command.prefix
-import javafx.collections.ObservableList
-import javafx.scene.control.ProgressBar
-import javafx.scene.control.ProgressIndicator
-import javafx.scene.control.TableView
-import javafx.scene.control.TextInputControl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URL
-import java.util.*
 
+data class AppLists(
+    val uninstall: List<App>,
+    val reinstall: List<App>,
+    val disable: List<App>,
+    val enable: List<App>
+)
+
+data class OperationResult(val appName: String, val packageName: String, val output: String)
 
 object AppManager {
 
-    lateinit var uninstallerTableView: TableView<App>
-    lateinit var reinstallerTableView: TableView<App>
-    lateinit var disablerTableView: TableView<App>
-    lateinit var enablerTableView: TableView<App>
-    lateinit var progress: ProgressBar
-    lateinit var progressInd: ProgressIndicator
-    lateinit var outputTextArea: TextInputControl
+    lateinit var cmd: CommandRunner
     var user = "0"
     val customApps = File(XiaomiADBFastbootTools.dir, "apps.yml")
     private val potentialApps = mutableMapOf<String, String>()
@@ -53,24 +48,18 @@ object AppManager {
         }
     }
 
-    suspend fun createTables() {
+    suspend fun getAppLists(): AppLists {
         val uninstallApps = mutableMapOf<String, MutableList<String>>()
         val reinstallApps = mutableMapOf<String, MutableList<String>>()
         val disableApps = mutableMapOf<String, MutableList<String>>()
         val enableApps = mutableMapOf<String, MutableList<String>>()
         val deviceApps = mutableMapOf<String, String>()
-        Command.exec(mutableListOf("adb", "shell", "pm", "list", "packages", "-u", "--user", user)).trim().lines()
-            .forEach {
-                deviceApps[it.substringAfter(':').trim()] = "uninstalled"
-            }
-        Command.exec(mutableListOf("adb", "shell", "pm", "list", "packages", "-d", "--user", user)).trim().lines()
-            .forEach {
-                deviceApps[it.substringAfter(':').trim()] = "disabled"
-            }
-        Command.exec(mutableListOf("adb", "shell", "pm", "list", "packages", "-e", "--user", user)).trim().lines()
-            .forEach {
-                deviceApps[it.substringAfter(':').trim()] = "enabled"
-            }
+        cmd.exec(mutableListOf("adb", "shell", "pm", "list", "packages", "-u", "--user", user)).trim().lines()
+            .forEach { deviceApps[it.substringAfter(':').trim()] = "uninstalled" }
+        cmd.exec(mutableListOf("adb", "shell", "pm", "list", "packages", "-d", "--user", user)).trim().lines()
+            .forEach { deviceApps[it.substringAfter(':').trim()] = "disabled" }
+        cmd.exec(mutableListOf("adb", "shell", "pm", "list", "packages", "-e", "--user", user)).trim().lines()
+            .forEach { deviceApps[it.substringAfter(':').trim()] = "enabled" }
         potentialApps.forEach { (pkg, name) ->
             when (deviceApps[pkg]) {
                 "disabled" -> {
@@ -84,197 +73,58 @@ object AppManager {
                 "uninstalled" -> reinstallApps.add(name, pkg)
             }
         }
-        withContext(Dispatchers.Main) {
-            uninstallerTableView.items.setAll(uninstallApps.toSortedMap().map { App(it.key, it.value) })
-            reinstallerTableView.items.setAll(reinstallApps.toSortedMap().map { App(it.key, it.value) })
-            disablerTableView.items.setAll(disableApps.toSortedMap().map { App(it.key, it.value) })
-            enablerTableView.items.setAll(enableApps.toSortedMap().map { App(it.key, it.value) })
-            uninstallerTableView.refresh()
-            reinstallerTableView.refresh()
-            disablerTableView.refresh()
-            enablerTableView.refresh()
-        }
+        return AppLists(
+            uninstall = uninstallApps.toSortedMap().map { App(it.key, it.value) },
+            reinstall = reinstallApps.toSortedMap().map { App(it.key, it.value) },
+            disable = disableApps.toSortedMap().map { App(it.key, it.value) },
+            enable = enableApps.toSortedMap().map { App(it.key, it.value) }
+        )
     }
 
-    suspend fun uninstall(selected: ObservableList<App>, n: Int) {
-        withContext(Dispatchers.Main) {
-            outputTextArea.text = ""
-            progress.progress = 0.0
-            progressInd.isVisible = true
-        }
-        selected.forEach {
-            it.packagenameProperty().get().trim().lines().forEach { pkg ->
-                val sb = StringBuilder()
-                withContext(Dispatchers.IO) {
-                    Scanner(
-                        startProcess(
-                            mutableListOf(
-                                "${prefix}adb",
-                                "shell",
-                                "pm",
-                                "uninstall",
-                                "--user",
-                                user,
-                                pkg.trim()
-                            )
-                        ).inputStream, "UTF-8"
-                    ).useDelimiter("").use { scanner ->
-                        while (scanner.hasNextLine())
-                            sb.append(scanner.nextLine() + '\n')
-                    }
-                }
-                withContext(Dispatchers.Main) {
-                    outputTextArea.apply {
-                        appendText("App: ${it.appnameProperty().get()}\n")
-                        appendText("Package: $pkg\n")
-                        appendText("Result: $sb\n")
-                    }
-                    progress.progress += 1.0 / n
-                }
+    private suspend fun executeForEach(
+        selected: List<App>,
+        buildCommand: (String) -> MutableList<String>,
+        checkSuccess: (String) -> Boolean,
+        onResult: suspend (OperationResult) -> Unit = {}
+    ): List<OperationResult> {
+        val results = mutableListOf<OperationResult>()
+        selected.forEach { app ->
+            app.packagenameProperty().get().trim().lines().forEach { pkg ->
+                val output = cmd.exec(buildCommand(pkg.trim()))
+                val success = if (checkSuccess(output)) "Success\n" else "Failure\n"
+                val result = OperationResult(app.appnameProperty().get(), pkg.trim(), success)
+                results.add(result)
+                onResult(result)
             }
         }
-        withContext(Dispatchers.Main) {
-            outputTextArea.appendText("Done!")
-            progress.progress = 0.0
-            progressInd.isVisible = false
-            createTables()
-        }
+        return results
     }
 
-    suspend fun reinstall(selected: ObservableList<App>, n: Int) {
-        withContext(Dispatchers.Main) {
-            outputTextArea.text = ""
-            progress.progress = 0.0
-            progressInd.isVisible = true
-        }
-        selected.forEach {
-            it.packagenameProperty().get().trim().lines().forEach { pkg ->
-                val sb = StringBuilder()
-                withContext(Dispatchers.IO) {
-                    Scanner(
-                        startProcess(
-                            mutableListOf(
-                                "${prefix}adb",
-                                "shell",
-                                "cmd",
-                                "package",
-                                "install-existing",
-                                "--user",
-                                user,
-                                pkg.trim()
-                            )
-                        ).inputStream, "UTF-8"
-                    ).useDelimiter("").use { scanner ->
-                        while (scanner.hasNextLine())
-                            sb.append(scanner.nextLine() + '\n')
-                    }
-                }
-                var output = sb.toString()
-                output = if ("installed for user" in output)
-                    "Success\n"
-                else "Failure [ADB error ${output.substringAfter(pkg).trim()}]\n"
-                withContext(Dispatchers.Main) {
-                    outputTextArea.apply {
-                        appendText("App: ${it.appnameProperty().get()}\n")
-                        appendText("Package: $pkg\n")
-                        appendText("Result: $output\n")
-                    }
-                    progress.progress += 1.0 / n
-                }
-            }
-        }
-        withContext(Dispatchers.Main) {
-            outputTextArea.appendText("Done!")
-            progress.progress = 0.0
-            progressInd.isVisible = false
-            createTables()
-        }
-    }
+    suspend fun uninstall(selected: List<App>, onResult: suspend (OperationResult) -> Unit = {}) =
+        executeForEach(selected,
+            { pkg -> mutableListOf("adb", "shell", "pm", "uninstall", "--user", user, pkg) },
+            { "Success" in it },
+            onResult
+        )
 
-    suspend fun disable(selected: ObservableList<App>, n: Int) {
-        withContext(Dispatchers.Main) {
-            outputTextArea.text = ""
-            progress.progress = 0.0
-            progressInd.isVisible = true
-        }
-        selected.forEach {
-            it.packagenameProperty().get().trim().lines().forEach { pkg ->
-                val sb = StringBuilder()
-                withContext(Dispatchers.IO) {
-                    Scanner(
-                        startProcess(
-                            mutableListOf(
-                                "${prefix}adb",
-                                "shell",
-                                "pm",
-                                "disable-user",
-                                "--user",
-                                user,
-                                pkg.trim()
-                            )
-                        ).inputStream, "UTF-8"
-                    ).useDelimiter("").use { scanner ->
-                        while (scanner.hasNextLine())
-                            sb.append(scanner.nextLine() + '\n')
-                    }
-                }
-                val output = if ("disabled-user" in sb.toString())
-                    "Success\n"
-                else "Failure [ADB error]\n"
-                withContext(Dispatchers.Main) {
-                    outputTextArea.apply {
-                        appendText("App: ${it.appnameProperty().get()}\n")
-                        appendText("Package: $pkg\n")
-                        appendText("Result: $output\n")
-                    }
-                    progress.progress += 1.0 / n
-                }
-            }
-        }
-        withContext(Dispatchers.Main) {
-            outputTextArea.appendText("Done!")
-            progress.progress = 0.0
-            progressInd.isVisible = false
-            createTables()
-        }
-    }
+    suspend fun reinstall(selected: List<App>, onResult: suspend (OperationResult) -> Unit = {}) =
+        executeForEach(selected,
+            { pkg -> mutableListOf("adb", "shell", "cmd", "package", "install-existing", "--user", user, pkg) },
+            { "installed for user" in it },
+            onResult
+        )
 
-    suspend fun enable(selected: ObservableList<App>, n: Int) {
-        withContext(Dispatchers.Main) {
-            outputTextArea.text = ""
-            progress.progress = 0.0
-            progressInd.isVisible = true
-        }
-        selected.forEach {
-            it.packagenameProperty().get().trim().lines().forEach { pkg ->
-                val sb = StringBuilder()
-                withContext(Dispatchers.IO) {
-                    Scanner(
-                        startProcess(mutableListOf("${prefix}adb", "shell", "pm", "enable", "--user", user, pkg.trim()))
-                            .inputStream, "UTF-8"
-                    ).useDelimiter("").use { scanner ->
-                        while (scanner.hasNextLine())
-                            sb.append(scanner.nextLine() + '\n')
-                    }
-                }
-                val output = if ("enabled" in sb.toString())
-                    "Success\n"
-                else "Failure [ADB error]\n"
-                withContext(Dispatchers.Main) {
-                    outputTextArea.apply {
-                        appendText("App: ${it.appnameProperty().get()}\n")
-                        appendText("Package: $pkg\n")
-                        appendText("Result: $output\n")
-                    }
-                    progress.progress += 1.0 / n
-                }
-            }
-        }
-        withContext(Dispatchers.Main) {
-            outputTextArea.appendText("Done!")
-            progress.progress = 0.0
-            progressInd.isVisible = false
-            createTables()
-        }
-    }
+    suspend fun disable(selected: List<App>, onResult: suspend (OperationResult) -> Unit = {}) =
+        executeForEach(selected,
+            { pkg -> mutableListOf("adb", "shell", "pm", "disable-user", "--user", user, pkg) },
+            { "disabled-user" in it },
+            onResult
+        )
+
+    suspend fun enable(selected: List<App>, onResult: suspend (OperationResult) -> Unit = {}) =
+        executeForEach(selected,
+            { pkg -> mutableListOf("adb", "shell", "pm", "enable", "--user", user, pkg) },
+            { "enabled" in it },
+            onResult
+        )
 }

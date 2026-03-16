@@ -43,7 +43,6 @@ class AppAdderController : Initializable {
                 AppManager.apply {
                     customApps.writeText(appTextArea.text.trim())
                     readPotentialApps()
-                    createTables()
                 }
             }
         }

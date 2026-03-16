@@ -326,7 +326,13 @@ class MainController : Initializable {
                         if (!Device.reinstaller || !Device.disabler)
                             outputTextArea.appendText("Note:\nThis device isn't fully supported by the App Manager.\nAs a result, some modules have been disabled.\n\n")
                         AppManager.readPotentialApps()
-                        AppManager.createTables()
+                        val lists = AppManager.getAppLists()
+                        withContext(Dispatchers.Main) {
+                            uninstallerTableView.items.setAll(lists.uninstall)
+                            reinstallerTableView.items.setAll(lists.reinstall)
+                            disablerTableView.items.setAll(lists.disable)
+                            enablerTableView.items.setAll(lists.enable)
+                        }
                     }
                     Mode.RECOVERY -> {
                         progressIndicator.isVisible = false
@@ -419,16 +425,8 @@ class MainController : Initializable {
 
         Command.outputTextArea = outputTextArea
         Command.progressIndicator = progressIndicator
-        ROMFlasher.outputTextArea = outputTextArea
-        ROMFlasher.progressBar = progressBar
-        ROMFlasher.progressIndicator = progressIndicator
-        AppManager.uninstallerTableView = uninstallerTableView
-        AppManager.reinstallerTableView = reinstallerTableView
-        AppManager.disablerTableView = disablerTableView
-        AppManager.enablerTableView = enablerTableView
-        AppManager.progress = progressBar
-        AppManager.progressInd = progressIndicator
-        AppManager.outputTextArea = outputTextArea
+        Device.cmd = Command
+        AppManager.cmd = Command
 
         GlobalScope.launch(Dispatchers.IO) {
             try {
@@ -871,14 +869,24 @@ class MainController : Initializable {
                     if (Device.checkFastboot()) {
                         if (confirm()) {
                             setPanels(null)
-                            when (scb) {
-                                "Clean install" -> ROMFlasher.flash("flash_all")
-                                "Clean install and lock" -> ROMFlasher.flash("flash_all_lock")
-                                "Update" -> ROMFlasher.flash(
-                                    dir.list()?.find { "flash_all_except" in it }?.substringBefore(
-                                        '.'
-                                    )
-                                )
+                            withContext(Dispatchers.Main) {
+                                progressBar.progress = 0.0
+                                progressIndicator.isVisible = true
+                                outputTextArea.text = ""
+                            }
+                            val scriptName = when (scb) {
+                                "Clean install" -> "flash_all"
+                                "Clean install and lock" -> "flash_all_lock"
+                                "Update" -> dir.list()?.find { "flash_all_except" in it }?.substringBefore('.')
+                                else -> null
+                            }
+                            ROMFlasher.flash(scriptName,
+                                onOutput = { withContext(Dispatchers.Main) { outputTextArea.appendText(it) } },
+                                onProgress = { withContext(Dispatchers.Main) { progressBar.progress = it } }
+                            )
+                            withContext(Dispatchers.Main) {
+                                progressBar.progress = 0.0
+                                progressIndicator.isVisible = false
                             }
                         }
                     } else checkDevice()
@@ -966,7 +974,7 @@ class MainController : Initializable {
                         outputTextArea.appendText("\nLooking for $it...\n")
                         progressIndicator.isVisible = true
                     }
-                    val link = getLink(it, codenameTextField.text.trim())
+                    val link = RomLinkResolver.getLink(it, codenameTextField.text.trim())
                     withContext(Dispatchers.Main) {
                         if (link != null && "bigota" in link) {
                             versionLabel.text = link.substringAfter(".com/").substringBefore('/')
@@ -994,7 +1002,7 @@ class MainController : Initializable {
                         outputTextArea.appendText("Looking for $branch...\n")
                         progressIndicator.isVisible = true
                         GlobalScope.launch {
-                            val link = getLink(branch, codenameTextField.text.trim())
+                            val link = RomLinkResolver.getLink(branch, codenameTextField.text.trim())
                             if (link != null && "bigota" in link) {
                                 withContext(Dispatchers.Main) {
                                     versionLabel.text = link.substringAfter(".com/").substringBefore('/')
@@ -1100,22 +1108,49 @@ class MainController : Initializable {
     @FXML
     private fun reloadMenuItemPressed(event: ActionEvent) = GlobalScope.launch { checkDevice() }
 
-    @FXML
-    private fun uninstallButtonPressed(event: ActionEvent) {
-        if (isAppSelected(uninstallerTableView.items))
+    private fun getSelectedApps(tableView: TableView<App>): List<App> =
+        tableView.items.filter { it.selectedProperty().get() }
+
+    private suspend fun refreshAppTables() {
+        val lists = AppManager.getAppLists()
+        withContext(Dispatchers.Main) {
+            uninstallerTableView.items.setAll(lists.uninstall)
+            reinstallerTableView.items.setAll(lists.reinstall)
+            disablerTableView.items.setAll(lists.disable)
+            enablerTableView.items.setAll(lists.enable)
+        }
+    }
+
+    private fun runAppOperation(
+        tableView: TableView<App>,
+        operation: suspend (List<App>, suspend (OperationResult) -> Unit) -> List<OperationResult>
+    ) {
+        if (isAppSelected(tableView.items))
             GlobalScope.launch {
                 if (Device.checkADB()) {
                     if (confirm()) {
                         setPanels(null)
-                        val selected = FXCollections.observableArrayList<App>()
-                        var n = 0
-                        uninstallerTableView.items.forEach {
-                            if (it.selectedProperty().get()) {
-                                selected.add(it)
-                                n += it.packagenameProperty().get().trim().lines().size
+                        val selected = getSelectedApps(tableView)
+                        val n = selected.sumBy { it.packagenameProperty().get().trim().lines().size }
+                        var done = 0
+                        withContext(Dispatchers.Main) {
+                            outputTextArea.text = ""
+                            progressBar.progress = 0.0
+                            progressIndicator.isVisible = true
+                        }
+                        operation(selected) { result ->
+                            done++
+                            withContext(Dispatchers.Main) {
+                                outputTextArea.appendText("App: ${result.appName}\nPackage: ${result.packageName}\nResult: ${result.output}\n")
+                                progressBar.progress = done.toDouble() / n
                             }
                         }
-                        AppManager.uninstall(selected, n)
+                        withContext(Dispatchers.Main) {
+                            outputTextArea.appendText("Done!")
+                            progressBar.progress = 0.0
+                            progressIndicator.isVisible = false
+                        }
+                        refreshAppTables()
                         setPanels(Device.mode)
                     }
                 } else checkDevice()
@@ -1123,81 +1158,28 @@ class MainController : Initializable {
     }
 
     @FXML
-    private fun reinstallButtonPressed(event: ActionEvent) {
-        if (isAppSelected(reinstallerTableView.items))
-            GlobalScope.launch {
-                if (Device.checkADB()) {
-                    if (confirm()) {
-                        setPanels(null)
-                        val selected = FXCollections.observableArrayList<App>()
-                        var n = 0
-                        reinstallerTableView.items.forEach {
-                            if (it.selectedProperty().get()) {
-                                selected.add(it)
-                                n += it.packagenameProperty().get().trim().lines().size
-                            }
-                        }
-                        AppManager.reinstall(selected, n)
-                        setPanels(Device.mode)
-                    }
-                } else checkDevice()
-            }
-    }
+    private fun uninstallButtonPressed(event: ActionEvent) =
+        runAppOperation(uninstallerTableView) { sel, cb -> AppManager.uninstall(sel, cb) }
 
     @FXML
-    private fun disableButtonPressed(event: ActionEvent) {
-        if (isAppSelected(disablerTableView.items))
-            GlobalScope.launch {
-                if (Device.checkADB()) {
-                    if (confirm()) {
-                        setPanels(null)
-                        val selected = FXCollections.observableArrayList<App>()
-                        var n = 0
-                        disablerTableView.items.forEach {
-                            if (it.selectedProperty().get()) {
-                                selected.add(it)
-                                n += it.packagenameProperty().get().trim().lines().size
-                            }
-                        }
-                        AppManager.disable(selected, n)
-                        setPanels(Device.mode)
-                    }
-                } else checkDevice()
-            }
-    }
+    private fun reinstallButtonPressed(event: ActionEvent) =
+        runAppOperation(reinstallerTableView) { sel, cb -> AppManager.reinstall(sel, cb) }
 
     @FXML
-    private fun enableButtonPressed(event: ActionEvent) {
-        if (isAppSelected(enablerTableView.items))
-            GlobalScope.launch {
-                if (Device.checkADB()) {
-                    if (confirm()) {
-                        setPanels(null)
-                        val selected = FXCollections.observableArrayList<App>()
-                        var n = 0
-                        enablerTableView.items.forEach {
-                            if (it.selectedProperty().get()) {
-                                selected.add(it)
-                                n += it.packagenameProperty().get().trim().lines().size
-                            }
-                        }
-                        AppManager.enable(selected, n)
-                        setPanels(Device.mode)
-                    }
-                } else checkDevice()
-            }
-    }
+    private fun disableButtonPressed(event: ActionEvent) =
+        runAppOperation(disablerTableView) { sel, cb -> AppManager.disable(sel, cb) }
+
+    @FXML
+    private fun enableButtonPressed(event: ActionEvent) =
+        runAppOperation(enablerTableView) { sel, cb -> AppManager.enable(sel, cb) }
 
     @FXML
     private fun secondSpaceButtonPressed(event: ActionEvent) {
         GlobalScope.launch {
-            if (Device.checkADB())
-                AppManager.apply {
-                    user = if (secondSpaceButton.isSelected)
-                        "10"
-                    else "0"
-                    createTables()
-                }
+            if (Device.checkADB()) {
+                AppManager.user = if (secondSpaceButton.isSelected) "10" else "0"
+                refreshAppTables()
+            }
         }
     }
 

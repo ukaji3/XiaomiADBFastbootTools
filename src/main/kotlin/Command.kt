@@ -5,7 +5,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.*
 
-object Command {
+object Command : CommandRunner {
 
     var prefix = ""
     lateinit var outputTextArea: TextInputControl

@@ -1,5 +1,6 @@
 object Device {
 
+    lateinit var cmd: CommandRunner
     var mode: Mode? = null
     var serial = ""
     var codename = ""
@@ -13,14 +14,14 @@ object Device {
     var disabler = true
     private var props = mutableMapOf<String, String>()
 
-    suspend fun checkADB() = serial in Command.exec(mutableListOf("adb", "devices"))
+    suspend fun checkADB() = serial in cmd.exec(mutableListOf("adb", "devices"))
 
-    suspend fun checkRecovery() = Command.exec(mutableListOf("adb", "devices")).let {
+    suspend fun checkRecovery() = cmd.exec(mutableListOf("adb", "devices")).let {
         serial in it && "recovery" in it
     }
 
     suspend fun readADB() {
-        val propString = Command.exec(mutableListOf("adb", "shell", "getprop"))
+        val propString = cmd.exec(mutableListOf("adb", "shell", "getprop"))
         when {
             "unauthorized" in propString -> mode = Mode.AUTH
             "no permission" in propString -> mode = Mode.ADB_ERROR
@@ -38,30 +39,24 @@ object Device {
                     codename = props["ro.build.product"] ?: ""
                     bootloader = props["ro.boot.flash.locked"]?.contains("0") ?: false
                     camera2 = props["persist.sys.camera.camera2"]?.contains("true") ?: false
-                    if ("recovery" in Command.exec(mutableListOf("adb", "devices")))
+                    if ("recovery" in cmd.exec(mutableListOf("adb", "devices")))
                         Mode.RECOVERY
                     else {
                         reinstaller =
-                            Command.exec(mutableListOf("adb", "shell", "cmd", "package", "install-existing xaft"))
+                            cmd.exec(mutableListOf("adb", "shell", "cmd", "package", "install-existing", "xaft"))
                                 .let {
                                     !("not found" in it || "Unknown command" in it)
                                 }
-                        disabler = "enabled" in Command.exec(
-                            mutableListOf(
-                                "adb",
-                                "shell",
-                                "pm",
-                                "enable",
-                                "com.android.settings"
-                            )
+                        disabler = "enabled" in cmd.exec(
+                            mutableListOf("adb", "shell", "pm", "enable", "com.android.settings")
                         )
                         dpi = try {
-                            Command.exec(mutableListOf("adb", "shell", "wm", "density")).substringAfterLast(':')
+                            cmd.exec(mutableListOf("adb", "shell", "wm", "density")).substringAfterLast(':')
                                 .trim().toInt()
                         } catch (e: Exception) {
                             -1
                         }
-                        Command.exec(mutableListOf("adb", "shell", "wm", "size")).let {
+                        cmd.exec(mutableListOf("adb", "shell", "wm", "size")).let {
                             width = try {
                                 it.substringAfterLast(':').substringBefore('x').trim().toInt()
                             } catch (e: Exception) {
@@ -81,15 +76,15 @@ object Device {
     }
 
     suspend fun checkFastboot() =
-        serial in Command.exec(mutableListOf("fastboot", "devices"), redirectErrorStream = false)
+        serial in cmd.exec(mutableListOf("fastboot", "devices"), redirectErrorStream = false)
 
     suspend fun readFastboot() {
-        val devices = Command.exec(mutableListOf("fastboot", "devices"), redirectErrorStream = false)
+        val devices = cmd.exec(mutableListOf("fastboot", "devices"), redirectErrorStream = false)
         when {
             "no permission" in devices -> mode = Mode.FASTBOOT_ERROR
             devices.isNotEmpty() -> {
                 props.clear()
-                Command.exec(mutableListOf("fastboot", "getvar", "all")).trim().lines().forEach {
+                cmd.exec(mutableListOf("fastboot", "getvar", "all")).trim().lines().forEach {
                     if (it[0] == '(')
                         props[it.substringAfter(')').substringBeforeLast(':').trim()] =
                             it.substringAfterLast(':').trim()

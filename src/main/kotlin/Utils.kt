@@ -10,11 +10,8 @@ import javafx.stage.StageStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.IOException
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.net.HttpURLConnection
-import java.net.URL
 
 enum class Mode {
     ADB, FASTBOOT, AUTH, RECOVERY, ADB_ERROR, FASTBOOT_ERROR
@@ -50,8 +47,7 @@ suspend fun Exception.alert() {
         Alert(Alert.AlertType.ERROR).apply {
             initStyle(StageStyle.UTILITY)
             title = "ERROR"
-            headerText =
-                "Unexpected exception!"
+            headerText = "Unexpected exception!"
             val vb = VBox()
             vb.alignment = Pos.CENTER
             val textArea = TextArea(stringWriter.toString()).apply {
@@ -79,51 +75,5 @@ suspend fun confirm(msg: String = ""): Boolean = withContext(Dispatchers.Main) {
         buttonTypes.setAll(yes, no)
         val result = showAndWait()
         result.get() == yes
-    }
-}
-
-fun getLink(version: String, codename: String): String? {
-    fun getLocation(codename: String, ending: String, region: String): String? {
-        (URL("http://update.miui.com/updates/v1/fullromdownload.php?d=$codename$ending&b=F&r=$region&n=").openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            setRequestProperty("Referer", "http://en.miui.com/a-234.html")
-            instanceFollowRedirects = false
-            try {
-                connect()
-                disconnect()
-            } catch (e: IOException) {
-                return null
-            }
-            return getHeaderField("Location")
-        }
-    }
-    when (version) {
-        "China Stable" ->
-            return getLocation(codename, "", "cn")
-        "EEA Stable" ->
-            return getLocation(codename, "_eea_global", "eea")
-        "Russia Stable" -> {
-            arrayOf("ru", "global").forEach {
-                val link = getLocation(codename, "_ru_global", it)
-                if (link != null && "bigota" in link)
-                    return link
-            }
-            return null
-        }
-        "Indonesia Stable" ->
-            return getLocation(codename, "_id_global", "global")
-        "India Stable" -> {
-            arrayOf("in", "global").forEach {
-                for (ending in arrayOf("_in_global", "_india_global", "_global")) {
-                    if (it == "global" && ending == "_global")
-                        break
-                    val link = getLocation(codename, ending, it)
-                    if (link != null && "bigota" in link)
-                        return link
-                }
-            }
-            return null
-        }
-        else -> return getLocation(codename, "_global", "global")
     }
 }
