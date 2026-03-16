@@ -253,10 +253,3 @@
                               </GridPane>
                            </children>
                         </AnchorPane>
-                    </content>
-                  </Tab>
-               </tabs>
-            </TabPane>
-         </children>
-      </GridPane>
-</AnchorPane>
