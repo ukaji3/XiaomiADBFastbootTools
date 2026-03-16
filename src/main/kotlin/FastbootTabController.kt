@@ -50,7 +50,7 @@ class FastbootTabController : Initializable, CoroutineScope {
         branchComboBox.items.addAll("China Stable", "EEA Stable", "Global Stable", "India Stable", "Indonesia Stable", "Russia Stable")
     }
 
-    private suspend fun execFastbootDisplayed(vararg args: MutableList<String>) {
+    private suspend fun execFastbootDisplayed(vararg args: List<String>) {
         withContext(Dispatchers.Main) { outputTextArea.text = "" }
         Command.execDisplayed(*args, onOutput = displayOutput)
     }
@@ -61,8 +61,8 @@ class FastbootTabController : Initializable, CoroutineScope {
                 File("dummy.img").apply {
                     writeBytes(ByteArray(8192))
                     withContext(Dispatchers.Main) {
-                        if ("FAILED" in Command.exec(mutableListOf("fastboot", "oem", "ignore", "anti"))) {
-                            if ("FAILED" in Command.exec(mutableListOf("fastboot", "flash", "antirbpass", "dummy.img")))
+                        if ("FAILED" in Command.exec(listOf("fastboot", "oem", "ignore", "anti"))) {
+                            if ("FAILED" in Command.exec(listOf("fastboot", "flash", "antirbpass", "dummy.img")))
                                 outputTextArea.text = "Couldn't disable anti-rollback safeguard!"
                             else outputTextArea.text = "Anti-rollback safeguard disabled!"
                         } else outputTextArea.text = "Anti-rollback safeguard disabled!"
@@ -91,8 +91,8 @@ class FastbootTabController : Initializable, CoroutineScope {
                             if (confirm()) {
                                 withContext(Dispatchers.Main) { outputTextArea.text = ""; progressIndicator.isVisible = true }
                                 if (autobootCheckBox.isSelected && pcb.trim() == "recovery")
-                                    Command.execWithImage(mutableListOf("fastboot", "flash", pcb.trim()), mutableListOf("fastboot", "boot"), image = it, onOutput = displayOutput)
-                                else Command.execWithImage(mutableListOf("fastboot", "flash", pcb.trim()), image = it, onOutput = displayOutput)
+                                    Command.execWithImage(listOf("fastboot", "flash", pcb.trim()), listOf("fastboot", "boot"), image = it, onOutput = displayOutput)
+                                else Command.execWithImage(listOf("fastboot", "flash", pcb.trim()), image = it, onOutput = displayOutput)
                                 withContext(Dispatchers.Main) { progressIndicator.isVisible = false }
                             }
                         } else onDeviceLost()
@@ -146,7 +146,7 @@ class FastbootTabController : Initializable, CoroutineScope {
                 launch {
                     if (Device.checkFastboot()) {
                         withContext(Dispatchers.Main) { outputTextArea.text = ""; progressIndicator.isVisible = true }
-                        Command.execWithImage(mutableListOf("fastboot", "boot"), image = it, onOutput = displayOutput)
+                        Command.execWithImage(listOf("fastboot", "boot"), image = it, onOutput = displayOutput)
                         withContext(Dispatchers.Main) { progressIndicator.isVisible = false }
                     } else onDeviceLost()
                 }
@@ -154,19 +154,19 @@ class FastbootTabController : Initializable, CoroutineScope {
     }
 
     @FXML private fun cacheButtonPressed(event: ActionEvent) {
-        launch { if (Device.checkFastboot()) execFastbootDisplayed(mutableListOf("fastboot", "erase", "cache")) else onDeviceLost() }
+        launch { if (Device.checkFastboot()) execFastbootDisplayed(listOf("fastboot", "erase", "cache")) else onDeviceLost() }
     }
     @FXML private fun dataButtonPressed(event: ActionEvent) {
-        launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "erase", "userdata")) } else onDeviceLost() }
+        launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(listOf("fastboot", "erase", "userdata")) } else onDeviceLost() }
     }
     @FXML private fun cachedataButtonPressed(event: ActionEvent) {
-        launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "erase", "cache"), mutableListOf("fastboot", "erase", "userdata")) } else onDeviceLost() }
+        launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(listOf("fastboot", "erase", "cache"), listOf("fastboot", "erase", "userdata")) } else onDeviceLost() }
     }
     @FXML private fun lockButtonPressed(event: ActionEvent) {
-        launch { if (Device.checkFastboot()) { if (confirm("Your partitions must be intact in order to successfully lock the bootloader.")) if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "oem", "lock")) } else onDeviceLost() }
+        launch { if (Device.checkFastboot()) { if (confirm("Your partitions must be intact in order to successfully lock the bootloader.")) if (confirm("All your data will be gone.")) execFastbootDisplayed(listOf("fastboot", "oem", "lock")) } else onDeviceLost() }
     }
     @FXML private fun unlockButtonPressed(event: ActionEvent) {
-        launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(mutableListOf("fastboot", "oem", "unlock")) } else onDeviceLost() }
+        launch { if (Device.checkFastboot()) { if (confirm("All your data will be gone.")) execFastbootDisplayed(listOf("fastboot", "oem", "unlock")) } else onDeviceLost() }
     }
 
     @FXML private fun getlinkButtonPressed(event: ActionEvent) {

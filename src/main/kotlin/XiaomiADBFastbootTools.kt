@@ -36,7 +36,7 @@ class XiaomiADBFastbootTools : Application() {
     override fun stop() {
         runBlocking {
             try {
-                Command.exec(mutableListOf("adb", "kill-server"))
+                Command.exec(listOf("adb", "kill-server"))
             } catch (e: Exception) {
                 // OK
             }

@@ -227,7 +227,7 @@ class MainController : Initializable, CoroutineScope {
                         Platform.exit()
                     }
             }
-            adbVersion = try { Command.exec(mutableListOf("adb", "--version")).lines()[1] } catch (e: Exception) { "Unknown" }
+            adbVersion = try { Command.exec(listOf("adb", "--version")).lines()[1] } catch (e: Exception) { "Unknown" }
             checkDevice()
         }
     }
@@ -254,8 +254,8 @@ class MainController : Initializable, CoroutineScope {
         launch {
             withContext(Dispatchers.Main) { outputTextArea.text = "" }
             when (Device.mode) {
-                Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.execDisplayed(mutableListOf("adb", "shell", "getprop"), onOutput = displayOutput) else checkDevice() }
-                Mode.FASTBOOT -> { if (Device.checkFastboot()) Command.execDisplayed(mutableListOf("fastboot", "getvar", "all"), onOutput = displayOutput) else checkDevice() }
+                Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.execDisplayed(listOf("adb", "shell", "getprop"), onOutput = displayOutput) else checkDevice() }
+                Mode.FASTBOOT -> { if (Device.checkFastboot()) Command.execDisplayed(listOf("fastboot", "getvar", "all"), onOutput = displayOutput) else checkDevice() }
                 else -> {}
             }
         }
@@ -266,7 +266,7 @@ class MainController : Initializable, CoroutineScope {
             when (Device.mode) {
                 Mode.ADB, Mode.RECOVERY -> {
                     if (Device.checkADB()) {
-                        val props = Command.exec(mutableListOf("adb", "shell", "getprop"))
+                        val props = Command.exec(listOf("adb", "shell", "getprop"))
                         withContext(Dispatchers.Main) {
                             FileChooser().apply {
                                 extensionFilters.add(FileChooser.ExtensionFilter("Text File", "*")); title = "Save properties"
@@ -277,7 +277,7 @@ class MainController : Initializable, CoroutineScope {
                 }
                 Mode.FASTBOOT -> {
                     if (Device.checkFastboot()) {
-                        val props = Command.exec(mutableListOf("fastboot", "getvar", "all"))
+                        val props = Command.exec(listOf("fastboot", "getvar", "all"))
                         withContext(Dispatchers.Main) {
                             FileChooser().apply {
                                 extensionFilters.add(FileChooser.ExtensionFilter("Text File", "*")); title = "Save properties"
@@ -294,22 +294,22 @@ class MainController : Initializable, CoroutineScope {
     @FXML private fun systemMenuItemPressed(event: ActionEvent) {
         launch {
             when (Device.mode) {
-                Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.exec(mutableListOf("adb", "reboot")); checkDevice() }
-                Mode.FASTBOOT -> { if (Device.checkFastboot()) Command.exec(mutableListOf("fastboot", "reboot")); checkDevice() }
+                Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.exec(listOf("adb", "reboot")); checkDevice() }
+                Mode.FASTBOOT -> { if (Device.checkFastboot()) Command.exec(listOf("fastboot", "reboot")); checkDevice() }
                 else -> {}
             }
         }
     }
 
     @FXML private fun recoveryMenuItemPressed(event: ActionEvent) {
-        launch { if (Device.mode == Mode.ADB || Device.mode == Mode.RECOVERY) { if (Device.checkADB()) Command.exec(mutableListOf("adb", "reboot", "recovery")); checkDevice() } }
+        launch { if (Device.mode == Mode.ADB || Device.mode == Mode.RECOVERY) { if (Device.checkADB()) Command.exec(listOf("adb", "reboot", "recovery")); checkDevice() } }
     }
 
     @FXML private fun fastbootMenuItemPressed(event: ActionEvent) {
         launch {
             when (Device.mode) {
-                Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.exec(mutableListOf("adb", "reboot", "bootloader")); checkDevice() }
-                Mode.FASTBOOT -> { if (Device.checkFastboot()) Command.exec(mutableListOf("fastboot", "reboot", "bootloader")); checkDevice() }
+                Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.exec(listOf("adb", "reboot", "bootloader")); checkDevice() }
+                Mode.FASTBOOT -> { if (Device.checkFastboot()) Command.exec(listOf("fastboot", "reboot", "bootloader")); checkDevice() }
                 else -> {}
             }
         }
@@ -318,8 +318,8 @@ class MainController : Initializable, CoroutineScope {
     @FXML private fun edlMenuItemPressed(event: ActionEvent) {
         launch {
             when (Device.mode) {
-                Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.exec(mutableListOf("adb", "reboot", "edl")); checkDevice() }
-                Mode.FASTBOOT -> { if (Device.checkFastboot()) Command.exec(mutableListOf("fastboot", "oem", "edl")); checkDevice() }
+                Mode.ADB, Mode.RECOVERY -> { if (Device.checkADB()) Command.exec(listOf("adb", "reboot", "edl")); checkDevice() }
+                Mode.FASTBOOT -> { if (Device.checkFastboot()) Command.exec(listOf("fastboot", "oem", "edl")); checkDevice() }
                 else -> {}
             }
         }

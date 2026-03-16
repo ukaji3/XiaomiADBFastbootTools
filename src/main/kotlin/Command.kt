@@ -1,7 +1,6 @@
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.*
 
 object Command : CommandRunner {
 
@@ -33,14 +32,13 @@ object Command : CommandRunner {
         return true
     }
 
-    override suspend fun exec(vararg args: MutableList<String>, redirectErrorStream: Boolean): String {
+    override suspend fun exec(vararg args: List<String>, redirectErrorStream: Boolean): String {
         val sb = StringBuilder()
         args.forEach {
-            it[0] = prefix + it[0]
+            val cmd = it.toMutableList(); cmd[0] = prefix + cmd[0]
             withContext(Dispatchers.IO) {
-                Scanner(startProcess(it, redirectErrorStream).inputStream, "UTF-8").useDelimiter("").use { scanner ->
-                    while (scanner.hasNextLine())
-                        sb.append(scanner.nextLine() + '\n')
+                startProcess(cmd, redirectErrorStream).inputReader().use { reader ->
+                    reader.forEachLine { line -> sb.append(line + '\n') }
                 }
             }
         }
@@ -48,17 +46,18 @@ object Command : CommandRunner {
     }
 
     suspend fun execDisplayed(
-        vararg args: MutableList<String>,
+        vararg args: List<String>,
         redirectErrorStream: Boolean = true,
         onOutput: suspend (String) -> Unit = {}
     ): String {
         val sb = StringBuilder()
         args.forEach {
-            it[0] = prefix + it[0]
+            val cmd = it.toMutableList(); cmd[0] = prefix + cmd[0]
             withContext(Dispatchers.IO) {
-                Scanner(startProcess(it, redirectErrorStream).inputStream, "UTF-8").useDelimiter("").use { scanner ->
-                    while (scanner.hasNextLine()) {
-                        val next = scanner.nextLine() + '\n'
+                startProcess(cmd, redirectErrorStream).inputReader().use { reader ->
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        val next = line + '\n'
                         sb.append(next)
                         onOutput(next)
                     }
@@ -69,18 +68,18 @@ object Command : CommandRunner {
     }
 
     suspend fun execWithImage(
-        vararg args: MutableList<String>,
+        vararg args: List<String>,
         image: File,
         onOutput: suspend (String) -> Unit = {}
     ) {
         args.forEach {
-            it[0] = prefix + it[0]
+            val cmd = it.toMutableList(); cmd[0] = prefix + cmd[0]
             withContext(Dispatchers.IO) {
-                Scanner(startProcess(it + image.absolutePath, true).inputStream, "UTF-8").useDelimiter("")
-                    .use { scanner ->
-                        while (scanner.hasNextLine())
-                            onOutput(scanner.nextLine() + '\n')
-                    }
+                startProcess(cmd + image.absolutePath, true).inputReader().use { reader ->
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null)
+                        onOutput(line + '\n')
+                }
             }
         }
     }

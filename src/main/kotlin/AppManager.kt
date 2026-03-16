@@ -54,11 +54,11 @@ object AppManager {
         val disableApps = mutableMapOf<String, MutableList<String>>()
         val enableApps = mutableMapOf<String, MutableList<String>>()
         val deviceApps = mutableMapOf<String, String>()
-        cmd.exec(mutableListOf("adb", "shell", "pm", "list", "packages", "-u", "--user", user)).trim().lines()
+        cmd.exec(listOf("adb", "shell", "pm", "list", "packages", "-u", "--user", user)).trim().lines()
             .forEach { deviceApps[it.substringAfter(':').trim()] = "uninstalled" }
-        cmd.exec(mutableListOf("adb", "shell", "pm", "list", "packages", "-d", "--user", user)).trim().lines()
+        cmd.exec(listOf("adb", "shell", "pm", "list", "packages", "-d", "--user", user)).trim().lines()
             .forEach { deviceApps[it.substringAfter(':').trim()] = "disabled" }
-        cmd.exec(mutableListOf("adb", "shell", "pm", "list", "packages", "-e", "--user", user)).trim().lines()
+        cmd.exec(listOf("adb", "shell", "pm", "list", "packages", "-e", "--user", user)).trim().lines()
             .forEach { deviceApps[it.substringAfter(':').trim()] = "enabled" }
         potentialApps.forEach { (pkg, name) ->
             when (deviceApps[pkg]) {
@@ -83,7 +83,7 @@ object AppManager {
 
     private suspend fun executeForEach(
         selected: List<App>,
-        buildCommand: (String) -> MutableList<String>,
+        buildCommand: (String) -> List<String>,
         checkSuccess: (String) -> Boolean,
         onResult: suspend (OperationResult) -> Unit = {}
     ): List<OperationResult> {
@@ -102,28 +102,28 @@ object AppManager {
 
     suspend fun uninstall(selected: List<App>, onResult: suspend (OperationResult) -> Unit = {}) =
         executeForEach(selected,
-            { pkg -> mutableListOf("adb", "shell", "pm", "uninstall", "--user", user, pkg) },
+            { pkg -> listOf("adb", "shell", "pm", "uninstall", "--user", user, pkg) },
             { "Success" in it },
             onResult
         )
 
     suspend fun reinstall(selected: List<App>, onResult: suspend (OperationResult) -> Unit = {}) =
         executeForEach(selected,
-            { pkg -> mutableListOf("adb", "shell", "cmd", "package", "install-existing", "--user", user, pkg) },
+            { pkg -> listOf("adb", "shell", "cmd", "package", "install-existing", "--user", user, pkg) },
             { "installed for user" in it },
             onResult
         )
 
     suspend fun disable(selected: List<App>, onResult: suspend (OperationResult) -> Unit = {}) =
         executeForEach(selected,
-            { pkg -> mutableListOf("adb", "shell", "pm", "disable-user", "--user", user, pkg) },
+            { pkg -> listOf("adb", "shell", "pm", "disable-user", "--user", user, pkg) },
             { "disabled-user" in it },
             onResult
         )
 
     suspend fun enable(selected: List<App>, onResult: suspend (OperationResult) -> Unit = {}) =
         executeForEach(selected,
-            { pkg -> mutableListOf("adb", "shell", "pm", "enable", "--user", user, pkg) },
+            { pkg -> listOf("adb", "shell", "pm", "enable", "--user", user, pkg) },
             { "enabled" in it },
             onResult
         )

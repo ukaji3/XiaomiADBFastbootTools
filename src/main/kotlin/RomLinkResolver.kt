@@ -1,22 +1,19 @@
-import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 
 object RomLinkResolver {
 
+    private val client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+
     private fun getLocation(codename: String, ending: String, region: String): String? {
-        (URL("http://update.miui.com/updates/v1/fullromdownload.php?d=$codename$ending&b=F&r=$region&n=").openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            setRequestProperty("Referer", "http://en.miui.com/a-234.html")
-            instanceFollowRedirects = false
-            try {
-                connect()
-                disconnect()
-            } catch (e: IOException) {
-                return null
-            }
-            return getHeaderField("Location")
-        }
+        val request = HttpRequest.newBuilder(URI("http://update.miui.com/updates/v1/fullromdownload.php?d=$codename$ending&b=F&r=$region&n="))
+            .header("Referer", "http://en.miui.com/a-234.html").GET().build()
+        return try {
+            client.send(request, HttpResponse.BodyHandlers.discarding())
+                .headers().firstValue("Location").orElse(null)
+        } catch (e: Exception) { null }
     }
 
     fun getLink(version: String, codename: String): String? = when (version) {

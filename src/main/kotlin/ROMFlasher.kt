@@ -1,7 +1,6 @@
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.*
 
 object ROMFlasher {
 
@@ -33,18 +32,18 @@ object ROMFlasher {
         withContext(Dispatchers.IO) {
             val script = setupScript(arg)
             val n = script.readText().split("fastboot").size - 1
-            Scanner(runScript(script, redirectErrorStream = true).inputStream, "UTF-8").useDelimiter("")
-                .use { scanner ->
-                    val sb = StringBuilder()
-                    while (scanner.hasNext()) {
-                        val next = scanner.next()
-                        sb.append(next)
-                        val full = sb.toString()
-                        if ("pause" in full) break
-                        onOutput(next)
-                        onProgress(1.0 * (full.toLowerCase().split("finished.").size - 1) / n)
-                    }
+            runScript(script, redirectErrorStream = true).inputReader().use { reader ->
+                val sb = StringBuilder()
+                var ch: Int
+                while (reader.read().also { ch = it } != -1) {
+                    val next = ch.toChar().toString()
+                    sb.append(next)
+                    val full = sb.toString()
+                    if ("pause" in full) break
+                    onOutput(next)
+                    onProgress(1.0 * (full.lowercase().split("finished.").size - 1) / n)
                 }
+            }
             script.delete()
         }
         onOutput("\nDone!")

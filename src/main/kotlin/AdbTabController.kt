@@ -146,13 +146,13 @@ class AdbTabController : Initializable, CoroutineScope {
     @FXML private fun enableButtonPressed(event: ActionEvent) =
         runAppOperation(enablerTableView) { sel, cb -> AppManager.enable(sel, cb) }
 
-    private suspend fun checkCamera2() = "1" in Command.exec(mutableListOf("adb", "shell", "getprop", "persist.camera.HAL3.enabled"))
-    private suspend fun checkEIS() = "1" in Command.exec(mutableListOf("adb", "shell", "getprop", "persist.camera.eis.enable"))
+    private suspend fun checkCamera2() = "1" in Command.exec(listOf("adb", "shell", "getprop", "persist.camera.HAL3.enabled"))
+    private suspend fun checkEIS() = "1" in Command.exec(listOf("adb", "shell", "getprop", "persist.camera.eis.enable"))
 
     private fun toggleRecoveryProp(prop: String, value: String, successMsg: String, failMsg: String, verify: suspend () -> Boolean) {
         launch {
             if (Device.checkRecovery()) {
-                Command.exec(mutableListOf("adb", "shell", "setprop", prop, value))
+                Command.exec(listOf("adb", "shell", "setprop", prop, value))
                 withContext(Dispatchers.Main) { outputTextArea.text = if (verify()) successMsg else failMsg }
             } else onDeviceLost()
         }
@@ -182,7 +182,7 @@ class AdbTabController : Initializable, CoroutineScope {
         launch {
             if (Device.checkADB()) {
                 withContext(Dispatchers.Main) { outputTextArea.text = "" }
-                val attempt = Command.execDisplayed(mutableListOf("adb", "shell", "wm", *args), onOutput = displayOutput)
+                val attempt = Command.execDisplayed(listOf("adb", "shell", "wm", *args), onOutput = displayOutput)
                 withContext(Dispatchers.Main) {
                     outputTextArea.text = when {
                         "permission" in attempt -> "ERROR: Please allow USB debugging (Security settings)!"

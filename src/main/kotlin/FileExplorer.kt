@@ -6,7 +6,6 @@ import javafx.scene.control.TextField
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.*
 
 class FileExplorer(private val statusTextField: TextField, private val statusProgressBar: ProgressBar) {
 
@@ -56,7 +55,7 @@ class FileExplorer(private val statusTextField: TextField, private val statusPro
 
     suspend fun getFiles(): ObservableList<AndroidFile> =
         FXCollections.observableArrayList<AndroidFile>().also { list ->
-            val files = Command.exec(mutableListOf("adb", "shell", "ls", "-l", path))
+            val files = Command.exec(listOf("adb", "shell", "ls", "-l", path))
             files.trim().lines().forEach {
                 if ("ls:" !in it && ':' in it)
                     makeFile(it)?.let { file ->
@@ -65,20 +64,21 @@ class FileExplorer(private val statusTextField: TextField, private val statusPro
             }
         }
 
-    private suspend fun exec(command: MutableList<String>) {
+    private suspend fun exec(command: List<String>) {
         withContext(Dispatchers.Main) {
             statusTextField.text = ""
         }
-        command[0] = prefix + command[0]
+        val cmd = command.toMutableList(); cmd[0] = prefix + cmd[0]
         withContext(Dispatchers.IO) {
-            Scanner(startProcess(command).inputStream, "UTF-8").useDelimiter("").use { scanner ->
-                while (scanner.hasNextLine()) {
-                    val output = scanner.nextLine()
+            startProcess(cmd).inputReader().use { reader ->
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    val output = line!!
                     withContext(Dispatchers.Main) {
                         if ('%' in output) {
                             statusProgressBar.progress = output.substringBefore('%').trim('[', ' ').toInt() / 100.0
                             statusTextField.text = output
-                        } else if ((command[1] == "shell" && command[2] in output) || "adb" in output)
+                        } else if ((cmd[1] == "shell" && cmd[2] in output) || "adb" in output)
                             statusTextField.text = "ERROR: ${output.substringAfterLast(':').trim()}"
                     }
                 }
@@ -88,10 +88,10 @@ class FileExplorer(private val statusTextField: TextField, private val statusPro
 
     suspend fun pull(selected: List<AndroidFile>, to: File) {
         if (selected.isEmpty()) {
-            exec(mutableListOf("adb", "pull", path, to.absolutePath))
+            exec(listOf("adb", "pull", path, to.absolutePath))
         } else {
             selected.forEach {
-                exec(mutableListOf("adb", "pull", path + it.name, to.absolutePath))
+                exec(listOf("adb", "pull", path + it.name, to.absolutePath))
             }
         }
         withContext(Dispatchers.Main) {
@@ -102,7 +102,7 @@ class FileExplorer(private val statusTextField: TextField, private val statusPro
 
     suspend fun push(selected: List<File>) {
         selected.forEach {
-            exec(mutableListOf("adb", "push", it.absolutePath, path))
+            exec(listOf("adb", "push", it.absolutePath, path))
         }
         withContext(Dispatchers.Main) {
             statusTextField.text = "Done!"
@@ -113,8 +113,8 @@ class FileExplorer(private val statusTextField: TextField, private val statusPro
     suspend fun delete(selected: List<AndroidFile>) {
         selected.forEach {
             if (it.dir)
-                exec(mutableListOf("adb", "shell", "rm", "-rf", (path + it.name).escape()))
-            else exec(mutableListOf("adb", "shell", "rm", "-f", (path + it.name).escape()))
+                exec(listOf("adb", "shell", "rm", "-rf", (path + it.name).escape()))
+            else exec(listOf("adb", "shell", "rm", "-f", (path + it.name).escape()))
         }
         withContext(Dispatchers.Main) {
             statusTextField.text = "Done!"
@@ -123,7 +123,7 @@ class FileExplorer(private val statusTextField: TextField, private val statusPro
     }
 
     suspend fun mkdir(name: String) {
-        exec(mutableListOf("adb", "shell", "mkdir", (path + name).escape()))
+        exec(listOf("adb", "shell", "mkdir", (path + name).escape()))
         withContext(Dispatchers.Main) {
             statusTextField.text = "Done!"
             statusProgressBar.progress = 0.0
@@ -131,7 +131,7 @@ class FileExplorer(private val statusTextField: TextField, private val statusPro
     }
 
     suspend fun rename(selected: AndroidFile, to: String) {
-        exec(mutableListOf("adb", "shell", "mv", (path + selected.name).escape(), (path + to).escape()))
+        exec(listOf("adb", "shell", "mv", (path + selected.name).escape(), (path + to).escape()))
         withContext(Dispatchers.Main) {
             statusTextField.text = "Done!"
             statusProgressBar.progress = 0.0
