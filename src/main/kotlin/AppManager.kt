@@ -54,7 +54,7 @@ object AppManager {
         cmd.exec(listOf("adb", "shell", "pm", "list", "packages", "-e", "--user", user)).trim().lines()
             .forEach { deviceApps[it.substringAfter(':').trim()] = "enabled" }
         val apps = if (showAllApps)
-            deviceApps.keys.associateWith { potentialApps[it] ?: it.substringAfterLast('.') }
+            deviceApps.keys.associateWith { potentialApps[it] ?: it }
         else potentialApps
         apps.forEach { (pkg, name) ->
             when (deviceApps[pkg]) {
