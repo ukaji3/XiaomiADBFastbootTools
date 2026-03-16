@@ -1,7 +1,6 @@
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.net.URL
 
 data class AppLists(
     val uninstall: List<App>,
@@ -27,16 +26,9 @@ object AppManager {
     suspend fun readPotentialApps() {
         potentialApps.clear()
         potentialApps["android.autoinstalls.config.Xiaomi.${Device.codename}"] = "PAI"
-        withContext(Dispatchers.IO) {
-            try {
-                URL("https://raw.githubusercontent.com/Szaki/XiaomiADBFastbootTools/master/src/main/resources/apps.yml").readText()
-                    .trim().lines()
-            } catch (ex: Exception) {
-                this::class.java.classLoader.getResource("apps.yml")?.readText()?.trim()?.lines()
-            }?.forEach { line ->
-                val app = line.split(':')
-                potentialApps[app[0].trim()] = app[1].trim()
-            }
+        this::class.java.classLoader.getResource("apps.yml")?.readText()?.trim()?.lines()?.forEach { line ->
+            val app = line.split(':')
+            potentialApps[app[0].trim()] = app[1].trim()
         }
         customApps.forEachLine { line ->
             val app = line.split(':')
